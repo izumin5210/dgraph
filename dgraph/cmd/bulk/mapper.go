@@ -56,6 +56,10 @@ type shardState struct {
 	mu         sync.Mutex // Allow only 1 write per shard at a time.
 }
 
+var (
+	errParseRDF = errors.New("parse error")
+)
+
 func newMapper(st *state) *mapper {
 	return &mapper{
 		state:  st,
@@ -130,7 +134,12 @@ func (m *mapper) run() {
 			}
 			rdf = strings.TrimSpace(rdf)
 
-			x.Check(m.parseRDF(rdf))
+			err = m.parseRDF(rdf)
+			if err == errParseRDF {
+				continue
+			} else if err != nil {
+				x.Check(err)
+			}
 			atomic.AddInt64(&m.prog.rdfCount, 1)
 			for i := range m.shards {
 				sh := &m.shards[i]
@@ -177,7 +186,8 @@ func (m *mapper) parseRDF(rdfLine string) error {
 		if err == rdf.ErrEmpty {
 			return nil
 		}
-		return errors.Wrapf(err, "while parsing line %q", rdfLine)
+		return errParseRDF
+		// return errors.Wrapf(err, "while parsing line %q", rdfLine)
 	}
 	m.processNQuad(nq)
 	return nil
